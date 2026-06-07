@@ -162,20 +162,18 @@ class NavegacaoError(PJePlusError):
     pass
 
 # =============================================================================
-# API CLIENT RE-EXPORTS (formerly Fix.variaveis_client / _helpers / _resolvers)
+# API CLIENT RE-EXPORTS (from Fix.variaveis)
 # =============================================================================
-from api.variaveis_client import PjeApiClient, session_from_driver
-
-from api.variaveis_helpers import (
+from Fix.variaveis import (
+    PjeApiClient,
+    session_from_driver,
+    session_from_page,
     obter_gigs_com_fase,
     obter_texto_documento,
     buscar_atividade_gigs_por_observacao,
     obter_todas_atividades_gigs_com_observacao,
     padrao_liq,
     verificar_bndt,
-)
-
-from api.variaveis_resolvers import (
     obter_codigo_validacao_documento,
     obter_peca_processual_da_timeline,
     resolver_variavel,

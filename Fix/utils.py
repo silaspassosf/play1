@@ -366,6 +366,138 @@ def login_automatico_direto(driver):
         return False
 
 
+def login_cpf_playwright(page, url_login=None, cpf=None, senha=None, aguardar_url_final=True):
+    """Login automático por CPF/senha — versão Playwright.
+
+    Mesmo comportamento de login_cpf() mas usando Page do Playwright.
+    Fluxo: navega → clica SSO PDPJ → preenche CPF → preenche senha → clica login → aguarda redirect.
+    Suporta detecção de MFA (aguarda manualmente).
+    """
+    import os, time
+
+    try:
+        # Tentar aplicar cookies previamente salvos
+        try:
+            from Fix.playwright_core import carregar_cookies_sessao
+            if carregar_cookies_sessao(page):
+                return True
+        except Exception:
+            pass
+
+        if cpf is None:
+            cpf = os.environ.get('PJE_USER')
+            if not cpf:
+                try:
+                    import keyring
+                    cpf = keyring.get_password('pjeplus', 'PJE_USER')
+                except Exception:
+                    pass
+        if senha is None:
+            senha = os.environ.get('PJE_SENHA')
+            if not senha:
+                try:
+                    import keyring
+                    senha = keyring.get_password('pjeplus', 'PJE_SENHA')
+                except Exception:
+                    pass
+        if not cpf or not senha:
+            logger.error('ERRO em login_cpf_playwright: Credenciais ausentes.')
+            return False
+
+        if not url_login:
+            url_login = 'https://pje.trt2.jus.br/primeirograu/login.seam'
+
+        logger.info("[LOGIN_PW] Navegando para: %s", url_login)
+        page.goto(url_login)
+        page.wait_for_load_state('domcontentloaded')
+
+        # Se já estamos logados (URL não contém 'login'/'auth'), retorna True
+        try:
+            cur = page.url.lower()
+            if not any(k in cur for k in ['login', 'auth', 'realms']):
+                logger.debug('[LOGIN_PW] Já autenticado (URL indica sessão ativa)')
+                return True
+        except Exception:
+            pass
+
+        # Clicar no botão SSO PDPJ
+        try:
+            btn_sso = page.locator('#btnSsoPdpj')
+            btn_sso.click(timeout=5000)
+            logger.debug('[LOGIN_PW] Botão SSO PDPJ clicado')
+            page.wait_for_timeout(1000)
+        except Exception as e:
+            logger.error("ERRO em login_cpf_playwright: Falha ao clicar no botão SSO PDPJ: %s", e)
+            return False
+
+        # Preencher CPF
+        try:
+            username_field = page.locator('#username')
+            username_field.wait_for(state='visible', timeout=5000)
+            username_field.fill(str(cpf))
+            logger.debug('[LOGIN_PW] CPF preenchido')
+        except Exception as e:
+            logger.error("ERRO em login_cpf_playwright: Não foi possível preencher CPF: %s", e)
+            return False
+
+        # Preencher senha
+        try:
+            password_field = page.locator('#password')
+            password_field.fill(str(senha))
+            logger.debug('[LOGIN_PW] Senha preenchida')
+        except Exception as e:
+            logger.error("ERRO em login_cpf_playwright: Não foi possível preencher senha: %s", e)
+            return False
+
+        # Clicar no botão de login
+        try:
+            btn = page.locator('#kc-login')
+            btn.click(timeout=5000)
+            logger.debug('[LOGIN_PW] Botão de login clicado')
+        except Exception as e:
+            logger.error("ERRO em login_cpf_playwright: Falha ao clicar no botão de login: %s", e)
+            return False
+
+        # Aguardar redirecionamento
+        if aguardar_url_final:
+            timeout = 120
+            inicio = time.time()
+            _nova_tela_validar_clicada = False
+            while time.time() - inicio < timeout:
+                try:
+                    cur = page.url.lower()
+                    if 'pjekz' in cur or 'sisbajud' in cur or not any(k in cur for k in ['login', 'auth', 'realms']):
+                        logger.debug('[LOGIN_PW] Login detectado por mudança de URL')
+                        try:
+                            from Fix.playwright_core import salvar_cookies_sessao
+                            salvar_cookies_sessao(page, info_extra='login_cpf_playwright')
+                        except Exception:
+                            pass
+                        return True
+
+                    # Detectar tela MFA
+                    if not _nova_tela_validar_clicada:
+                        try:
+                            btn_validar = page.locator('input#kc-login[value="Validar"]')
+                            if btn_validar.is_visible():
+                                logger.warning('[LOGIN_PW] Tela MFA detectada — insira o código no browser.')
+                                print('\n*** AGUARDANDO MFA: insira o código do Google Authenticator no browser e clique em "Validar" ***\n')
+                                _nova_tela_validar_clicada = True
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                time.sleep(0.5)
+            logger.warning('[LOGIN_PW] Timeout aguardando redirecionamento pós-login')
+            return False
+
+        return True
+
+    except Exception as e:
+        logger.error("ERRO em login_cpf_playwright: %s: %s", type(e).__name__, e)
+        return False
+
+
 def login_cpf(driver, url_login=None, cpf=None, senha=None, aguardar_url_final=True):
     """Login automático por CPF/senha - OTIMIZADO: usa preencher_multiplos_campos()"""
     try:
