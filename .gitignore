@@ -43,3 +43,4 @@ cache/
 # Sensitive
 .env
 *.pem
+.aider*

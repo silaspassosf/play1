@@ -382,6 +382,34 @@ def session_from_driver(driver, grau: int = 1) -> Tuple[requests.Session, str]:
     return sess, trt_host
 
 
+def session_from_page(page, grau: int = 1) -> Tuple[requests.Session, str]:
+    """Cria um `requests.Session` a partir de uma Playwright `Page`.
+
+    Equivalente a session_from_driver mas para Playwright.
+    Retorna (session, trt_host) — mesma interface.
+
+    Uso:
+        from Fix.variaveis import session_from_page, PjeApiClient
+        sess, trt = session_from_page(page)
+        client = PjeApiClient(sess, trt)
+    """
+    sess = requests.Session()
+    try:
+        cookies = page.context.cookies()
+        for c in cookies:
+            sess.cookies.set(c['name'], c['value'])
+        parsed = urlparse(page.url)
+        trt_host = parsed.netloc
+    except Exception:
+        raise
+    sess.headers.update({
+        'Accept': 'application/json, text/plain, */*',
+        'Content-Type': 'application/json',
+        'X-Grau-Instancia': str(grau)
+    })
+    return sess, trt_host
+
+
 def obter_codigo_validacao_documento(client: PjeApiClient, id_processo: str, id_documento: str) -> Optional[str]:
     """Replica a construção de 'chave' feita na extensão.
 
